@@ -19,25 +19,24 @@ try:
     today_str = datetime.now().strftime('%Y-%m-%d')
     tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     
-    # 1. 내일 휴가자 확인
+    # 1. 내일 휴가자 명단
     tomorrow_list = [r['이름'] for r in records if str(r['날짜']) == tomorrow_str]
     
-    # 2. 갑자기 아픈 휴가(당일아픔) 중 아직 날짜가 안 지난 것 확인
+    # 2. 아직 날짜가 지나지 않은 '당일아픔' 내역 수집
     emergency_list = []
     for r in records:
         if "(당일아픔)" in str(r['유형']) and str(r['날짜']) >= today_str:
-            emergency_list.append(f"{r['날짜']} {r['이름']}님(사유:{r['사유']})")
+            emergency_list.append(f"- {r['날짜']} {r['이름']}님 (사유:{r['사유']})")
 
-    # 알림 구성
-    final_msg = []
+    messages = []
     if tomorrow_list:
-        final_msg.append(f"📢 [내일 휴가 안내]\n내일({tomorrow_str})은 {', '.join(tomorrow_list)} 선생님 휴가입니다.")
+        messages.append(f"📢 [내일 휴가 안내]\n내일({tomorrow_str})은 {', '.join(tomorrow_list)} 선생님 휴가입니다.")
     
     if emergency_list:
-        final_msg.append(f"🚨 [긴급/병가 리마인드]\n오늘 이후 예정된 아픔 신청 내역입니다:\n" + "\n".join(emergency_list))
+        messages.append(f"🚨 [병가/긴급 휴가 리마인드]\n오늘 이후 예정된 아픔 신청 내역입니다:\n" + "\n".join(emergency_list))
 
-    if final_msg:
-        send_line("\n\n".join(final_msg))
+    if messages:
+        send_line("\n\n".join(messages))
 
 except Exception as e:
     print(f"Error: {e}")
