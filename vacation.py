@@ -44,11 +44,14 @@ def send_line(msg):
     }
     requests.post(url, headers=headers, json=payload)
 
+# 한국어 요일 리스트
+WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+
 # 3. 데이터 로드
 status_df = pd.DataFrame(status_sheet.get_all_records())
 records_df = pd.DataFrame(record_sheet.get_all_records())
 
-st.title("🌿 2026 동경한의원 세종 휴가 대시보드 (v2.3)")
+st.title("🌿 2026 동경한의원 세종 휴가 대시보드 (v2.4)")
 
 # 현황 요약 표시
 c1, c2 = st.columns(2)
@@ -66,10 +69,9 @@ st.divider()
 # 4. 실시간 반응형 신청 사이드바
 st.sidebar.header("📅 휴가 신청")
 
-# [해결책] 신청자 선택을 폼 외부로 이동하여 즉각적인 반응 유도
+# 신청자 선택 (유형 실시간 연동을 위해 폼 외부로 배치)
 name = st.sidebar.selectbox("신청자 선택", ["정도희", "전미진"])
 
-# 선택된 이름에 따라 유형 목록 실시간 생성
 if name == "정도희":
     available_options = ["월차"]
 else:
@@ -87,7 +89,9 @@ with st.sidebar.form("leave_form", clear_on_submit=True):
 if submit:
     today = date.today()
     diff = (t_date - today).days
-    is_sat = t_date.weekday() == 5 
+    day_idx = t_date.weekday() # 0:월 ~ 6:일
+    weekday_str = WEEKDAYS[day_idx]
+    is_sat = day_idx == 5 
 
     # [오전반차 검증]
     if l_type == "오전반차":
@@ -134,7 +138,7 @@ if submit:
             emergency_tag = " (당일아픔)" if is_emergency else ""
             record_sheet.append_row([str(t_date), name, l_type + emergency_tag, reason, deduct_val])
             
-            # 토요일 체크
+            # 토요일 연속 체크
             sat_warning = ""
             if is_sat:
                 user_records = records_df[records_df['이름'] == name].copy()
@@ -144,18 +148,24 @@ if submit:
                     if last_sat and (pd.Timestamp(t_date) - last_sat).days <= 14:
                         sat_warning = "\n⚠️ 주의: 토요일 연속 사용 감지!"
 
-            # 라인 발송
-            msg = f"🔔 [휴가신청]{emergency_tag}\n{name}님이 {t_date}({l_type})을 신청했습니다.{new_val_msg}{sat_warning}\n사유: {reason}"
+            # [변경 사항] 라인 발송 메시지에 요일 추가
+            msg = f"🔔 [휴가신청]{emergency_tag}\n{name}님이 {t_date}({weekday_str})({l_type})을 신청했습니다.{new_val_msg}{sat_warning}\n사유: {reason}"
             send_line(msg)
             
-            st.success(f"✅ 신청이 완료되었습니다! {new_val_msg}")
+            st.success(f"✅ 신청 완료! ({weekday_str})요일입니다. {new_val_msg}")
             st.rerun()
             
         except ValueError:
             st.error("직원 명단에 이름이 없습니다.")
 
-# 5. 하단 기록 표시
+# 5. 하단 로그 표시
 st.subheader("📋 전체 휴가 기록 (로그)")
 updated_records = pd.DataFrame(record_sheet.get_all_records())
 if not updated_records.empty:
-    st.dataframe(updated_records.sort_values("날짜", ascending=False), use_container_width=True)
+    # [변경 사항] 테이블에 요일 정보 추가 표시
+    updated_records['날짜_dt'] = pd.to_datetime(updated_records['날짜'])
+    updated_records['날짜'] = updated_records['날짜'].astype(str) + " (" + updated_records['날짜_dt'].dt.weekday.map(lambda x: WEEKDAYS[x]) + ")"
+    
+    # 불필요한 보조 컬럼 제거 후 표시
+    display_df = updated_records.drop(columns=['날짜_dt']).sort_values("날짜", ascending=False)
+    st.dataframe(display_df, use_container_width=True)
